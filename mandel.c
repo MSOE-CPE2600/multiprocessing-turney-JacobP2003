@@ -83,7 +83,8 @@ int main( int argc, char *argv[] )
 				break;
 			case 'n':
 				num_proc = atoi(optarg);
-				if(num_proc > MAX_PROC){
+				if(num_proc > MAX_PROC){ 
+					//If the user input exceeds maximum processes, use max instead
 					num_proc = MAX_PROC;
 				}
 				break;
@@ -98,11 +99,11 @@ int main( int argc, char *argv[] )
         {
             if (active_proc >= num_proc)
             {
-                wait(NULL);
-                active_proc--;
+                wait(NULL); //if exceeding the number of active processes, wait
+                active_proc--; 
             }
             int pid = fork();
-            if (pid == 0)
+            if (pid == 0) 
             {
 				char frame[32];
 				sprintf(frame, "mandel%d.jpg", k);
