@@ -1,11 +1,20 @@
-/// 
-//  jpegrw.c
-//  Based on example code found here:
-//  https://www.tspi.at/2020/03/20/libjpegexample.html
-//
-//  Minor changes made to some types.
-//  Compile with -ljpeg
-///
+/**
+ * @file jpegrw.c
+ * @author Jacob Purcell (purcellj@msoe.edu)
+ * @brief 
+ * @version 0.1
+ * @date 2025-11-11
+ * 
+ * 		Based on example code found here:
+ * 		https://www.tspi.at/2020/03/20/libjpegexample.html
+ * 
+ * 		Minor changes made to some types.
+ * 
+ * 		Compile with -ljpeg
+ * 
+ * @copyright Copyright (c) 2025
+ * 
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <jpeglib.h>    

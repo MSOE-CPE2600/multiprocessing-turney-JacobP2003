@@ -1,15 +1,30 @@
-/// 
-//  mandel.c
-//  Based on example code found here:
-//  https://users.cs.fiu.edu/~cpoellab/teaching/cop4610_fall22/project3.html
-//
-//  Converted to use jpg instead of BMP and other minor changes
-//  
-///
+/**
+ * @file mandel.c
+ * @author Jacob Purcell (purcellj@msoe.edu)
+ * @brief 
+ * @version 0.1
+ * @date 2025-11-11
+ * 
+ * 		Based on example code found here:
+ * 		https://users.cs.fiu.edu/~cpoellab/teaching/cop4610_fall22/project3.html
+ * 
+ * 		Converted to use jpg instead of BMP and other minor changes
+ * 
+ * @copyright Copyright (c) 2025
+ * 
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include "jpegrw.h"
+
+#include <sys/mman.h>
+#include <wait.h>
+#include <sys/stat.h>
+#define NUM_FRAMES 50
+#define MAX_PROC 50
+#define STRING_LENGTH 16
+
 
 // local routines
 static int iteration_to_color( int i, int max );
@@ -23,6 +38,8 @@ int main( int argc, char *argv[] )
 {
 	char c;
 
+	int active_proc = 0;
+
 	// These are the default configuration values used
 	// if no command line arguments are given.
 	const char *outfile = "mandel.jpg";
@@ -33,11 +50,14 @@ int main( int argc, char *argv[] )
 	int    image_width = 1000;
 	int    image_height = 1000;
 	int    max = 1000;
+	int	num_proc = 1;
+
+
 
 	// For each command line argument given,
 	// override the appropriate configuration value.
 
-	while((c = getopt(argc,argv,"x:y:s:W:H:m:o:h"))!=-1) {
+	while((c = getopt(argc,argv,"x:y:s:W:H:m:o:n:h"))!=-1) {
 		switch(c) 
 		{
 			case 'x':
@@ -61,6 +81,12 @@ int main( int argc, char *argv[] )
 			case 'o':
 				outfile = optarg;
 				break;
+			case 'n':
+				num_proc = atoi(optarg);
+				if(num_proc > MAX_PROC){
+					num_proc = MAX_PROC;
+				}
+				break;
 			case 'h':
 				show_help();
 				exit(1);
@@ -68,27 +94,55 @@ int main( int argc, char *argv[] )
 		}
 	}
 
-	// Calculate y scale based on x scale (settable) and image sizes in X and Y (settable)
-	yscale = xscale / image_width * image_height;
+	for (int k = 0; k < NUM_FRAMES;k++)
+        {
+            if (active_proc >= num_proc)
+            {
+                wait(NULL);
+                active_proc--;
+            }
+            int pid = fork();
+            if (pid == 0)
+            {
+				char frame[32];
+				sprintf(frame, "mandel%d.jpg", k);
+				outfile = frame;
 
-	// Display the configuration of the image.
-	printf("mandel: x=%lf y=%lf xscale=%lf yscale=%1f max=%d outfile=%s\n",xcenter,ycenter,xscale,yscale,max,outfile);
+				xscale -= (k*0.08);
+				ycenter -= (k*0.02);
+                // Calculate y scale based on x scale (settable) and image sizes in X and Y (settable)
+				yscale = (xscale) / image_width * image_height;
 
-	// Create a raw image of the appropriate size.
-	imgRawImage* img = initRawImage(image_width,image_height);
+				// Display the configuration of the image.
+				printf("mandel: x=%lf y=%lf xscale=%lf yscale=%1f max=%d outfile=%s\n",xcenter,ycenter,xscale,yscale,max,outfile);
 
-	// Fill it with a black
-	setImageCOLOR(img,0);
+				// Create a raw image of the appropriate size.
+				imgRawImage* img = initRawImage(image_width,image_height);
 
-	// Compute the Mandelbrot image
-	compute_image(img,xcenter-xscale/2,xcenter+xscale/2,ycenter-yscale/2,ycenter+yscale/2,max);
+				// Fill it with a black
+				setImageCOLOR(img,0);
 
-	// Save the image in the stated file.
-	storeJpegImageFile(img,outfile);
+				// Compute the Mandelbrot image
+				compute_image(img,xcenter-xscale/2,xcenter+xscale/2,ycenter-yscale/2,ycenter+yscale/2,max);
 
-	// free the mallocs
-	freeRawImage(img);
+				// Save the image in the stated file.
+				storeJpegImageFile(img,outfile);
 
+				// free the mallocs
+				freeRawImage(img);
+                exit(0);
+            }else if (pid > 0)
+            {
+                active_proc++;
+            }
+            
+        }
+        //wait for all of the remaining child processes to finish
+        while(active_proc > 0)
+        {
+            wait(NULL);
+            active_proc--;
+        }
 	return 0;
 }
 
@@ -177,6 +231,7 @@ void show_help()
 	printf("-W <pixels> Width of the image in pixels. (default=1000)\n");
 	printf("-H <pixels> Height of the image in pixels. (default=1000)\n");
 	printf("-o <file>   Set output file. (default=mandel.bmp)\n");
+	printf("-n <processes> Set number of processes used\n");
 	printf("-h          Show this help text.\n");
 	printf("\nSome examples are:\n");
 	printf("mandel -x -0.5 -y -0.5 -s 0.2\n");
