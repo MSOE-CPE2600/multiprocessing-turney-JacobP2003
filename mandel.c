@@ -276,7 +276,8 @@ void show_help()
 	printf("-W <pixels> Width of the image in pixels. (default=1000)\n");
 	printf("-H <pixels> Height of the image in pixels. (default=1000)\n");
 	printf("-o <file>   Set output file. (default=mandel.bmp)\n");
-	printf("-n <processes> Set number of processes used\n");
+	printf("-p <processes> Set number of processes used (MAX: 50)\n");
+	printf("-t <threads> Set number of threads used per process (MAX: 20)");
 	printf("-h          Show this help text.\n");
 	printf("\nSome examples are:\n");
 	printf("mandel -x -0.5 -y -0.5 -s 0.2\n");
