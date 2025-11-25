@@ -21,8 +21,10 @@
 #include <sys/mman.h>
 #include <wait.h>
 #include <sys/stat.h>
+#include <pthread.h>
 #define NUM_FRAMES 50
 #define MAX_PROC 50
+#define MAX_THREAD 20
 #define STRING_LENGTH 16
 
 
@@ -30,8 +32,15 @@
 static int iteration_to_color( int i, int max );
 static int iterations_at_point( double x, double y, int max );
 static void compute_image( imgRawImage *img, double xmin, double xmax,
-									double ymin, double ymax, int max );
+									double ymin, double ymax, int max, int num_thread);
 static void show_help();
+
+typedef struct threadArgs_t {
+	int this_thread, num_thread;
+	imgRawImage* img; 
+	double xmin, xmax, ymin, ymax; 
+	int max;
+} threadArgs_t;
 
 
 int main( int argc, char *argv[] )
@@ -51,13 +60,14 @@ int main( int argc, char *argv[] )
 	int    image_height = 1000;
 	int    max = 1000;
 	int	num_proc = 1;
+	int num_thread = 1;
 
 
 
 	// For each command line argument given,
 	// override the appropriate configuration value.
 
-	while((c = getopt(argc,argv,"x:y:s:W:H:m:o:n:h"))!=-1) {
+	while((c = getopt(argc,argv,"x:y:s:W:H:m:o:p:t:h"))!=-1) {
 		switch(c) 
 		{
 			case 'x':
@@ -81,11 +91,18 @@ int main( int argc, char *argv[] )
 			case 'o':
 				outfile = optarg;
 				break;
-			case 'n':
+			case 'p':
 				num_proc = atoi(optarg);
 				if(num_proc > MAX_PROC){ 
 					//If the user input exceeds maximum processes, use max instead
 					num_proc = MAX_PROC;
+				}
+				break;
+			case 't':
+				num_thread = atoi(optarg);
+				if(num_thread > MAX_THREAD){ 
+					//If the user input exceeds maximum processes, use max instead
+					num_thread = MAX_THREAD;
 				}
 				break;
 			case 'h':
@@ -124,7 +141,7 @@ int main( int argc, char *argv[] )
 				setImageCOLOR(img,0);
 
 				// Compute the Mandelbrot image
-				compute_image(img,xcenter-xscale/2,xcenter+xscale/2,ycenter-yscale/2,ycenter+yscale/2,max);
+				compute_image(img,xcenter-xscale/2,xcenter+xscale/2,ycenter-yscale/2,ycenter+yscale/2,max,num_thread);
 
 				// Save the image in the stated file.
 				storeJpegImageFile(img,outfile);
@@ -147,6 +164,32 @@ int main( int argc, char *argv[] )
 	return 0;
 }
 
+void *thread_func(void *arg){
+	threadArgs_t* args = (threadArgs_t*) arg;
+	int this_thread = args->this_thread;
+	int num_thread = args->num_thread;
+	int width = args->img->width;
+	int height = args->img->height;
+	int xmin = args->xmin;
+	int xmax = args->xmax;
+	int ymin = args->ymin;
+	int ymax = args->ymax;
+	int max = args->max;
+	for(int j = this_thread*(height/num_thread); j < (this_thread+1)*(height/num_thread); j++) {
+		for(int i=0;i<width;i++) {
+			// Determine the point in x,y space for that pixel.
+			double x = xmin + i*(xmax-xmin)/width;
+			double y = ymin + j*(ymax-ymin)/height;
+
+			// Compute the iterations at that point.
+			int iters = iterations_at_point(x,y,max);
+
+			// Set the pixel in the bitmap.
+			setPixelCOLOR(args->img,i,j,iteration_to_color(iters,max));
+		}
+	}
+	pthread_exit(NULL);
+}
 
 
 
@@ -181,30 +224,31 @@ Compute an entire Mandelbrot image, writing each point to the given bitmap.
 Scale the image to the range (xmin-xmax,ymin-ymax), limiting iterations to "max"
 */
 
-void compute_image(imgRawImage* img, double xmin, double xmax, double ymin, double ymax, int max )
+void compute_image(imgRawImage* img, double xmin, double xmax, double ymin, double ymax, int max, int num_thread)
 {
-	int i,j;
-
-	int width = img->width;
-	int height = img->height;
-
 	// For every pixel in the image...
-
-	for(j=0;j<height;j++) {
-
-		for(i=0;i<width;i++) {
-
-			// Determine the point in x,y space for that pixel.
-			double x = xmin + i*(xmax-xmin)/width;
-			double y = ymin + j*(ymax-ymin)/height;
-
-			// Compute the iterations at that point.
-			int iters = iterations_at_point(x,y,max);
-
-			// Set the pixel in the bitmap.
-			setPixelCOLOR(img,i,j,iteration_to_color(iters,max));
+	pthread_t threads[num_thread];
+		for(int i = 0; i < num_thread; i++){
+			threadArgs_t* threadArgs = malloc(sizeof(struct threadArgs_t));
+			threadArgs->this_thread = i;
+			threadArgs->num_thread = num_thread;
+			threadArgs->img = img;
+			threadArgs->xmin = xmin;
+			threadArgs->xmax = xmax;
+			threadArgs->ymin = ymin;
+			threadArgs->ymax = ymax;
+			threadArgs->max = max;
+			if(pthread_create(&threads[i], NULL, thread_func, &threadArgs) != 0){
+				perror("pthread_create");
+				exit(1);
+			}
 		}
+
+	//Join all threads
+	for(int i = 0; i < num_thread; i++){
+		pthread_join(threads[i], NULL);
 	}
+
 }
 
 
